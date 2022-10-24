@@ -23,6 +23,8 @@ wheels/
 pip-wheel-metadata/
 share/python-wheels/
 *.egg-info/
+env/
+.pytest_cache/
 .installed.cfg
 *.egg
 MANIFEST
