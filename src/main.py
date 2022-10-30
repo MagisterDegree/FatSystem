@@ -1,27 +1,45 @@
 import struct
 
-
-class FileUtils:
-
-    @staticmethod
-    def get_content_from_byte_array(data: bytearray) -> str:
-        """
-
-        :rtype: object
-        """
-        result = data.decode('utf-8').strip().rstrip('\x00')
-        print(data)
-        return str(result)
+from src.block import Block
+from src.file_type import FileType
+from src.file_utils import FileUtils
+from src.tree_node import TreeNode
 
 
-class Block:
-    def __init__(self, number: str, value: str, file: str = ""):
-        self.number = number
-        self.value = value
-        self.file = file
+class TreeFiles:
+    def __init__(self):
+        self.name = "root"
+        self.children = []
 
-    def __str__(self) -> str:
-        return f"Block #{self.number} -> {self.value}, pertain={self.file}"
+    def add_child(self, node: TreeNode):
+        self.children.append(node)
+
+    def add_child_for_node(self, base_node_idx_start_block: int, node: TreeNode):
+        for child in self.children:
+            if child.idx_start_block == base_node_idx_start_block:
+                child.add_child(node)
+
+    def print(self):
+        print(f"/{self.name}")
+        for child in self.children:
+            child.print()
+
+
+class TableFAT:
+    def __init__(self, size: int):
+        self.size = size
+        self.table = []  # [Block(i, 0) for i in range(self.size)]
+
+    def add(self, block: Block):
+        self.table.append(block)
+
+    def print(self, show_empty: bool = False):
+        print(" === Table FAT === ")
+        for block in self.table:
+            if not show_empty and block.value == 0:
+                pass
+            else:
+                print(block)
 
 
 class Object:
@@ -52,8 +70,17 @@ class FileSystem:
 
     def __init_file__(self, path: str):
         self.path = path
-        in_file = open(path, "rb")  # opening for [r]eading as [b]inary
-        self.bytes: bytearray = in_file.read()
+        try:
+            in_file = open(path, "rb")  # opening for [r]eading as [b]inary
+            self.bytes: bytearray = in_file.read()
+        except:
+            print("Файл не был найден")
+        else:
+            # Ошибки не было
+            pass
+        finally:
+            # Выполнить в любом случае
+            pass
 
     def __init_super_block__(self):
         self.idx_super_block_start = 0
@@ -67,22 +94,20 @@ class FileSystem:
     def __init_table_fat__(self):
         self.idx_table_fat_start = self.idx_super_block_end
         self.idx_table_fat_end = self.idx_table_fat_start + self.size_table
-        self.table = []
+        self.table = TableFAT(self.size_table)
         for idx in range(self.idx_table_fat_start, self.idx_table_fat_end, 8):
             block_idx = struct.unpack('I', self.bytes[idx:idx + 4])[0]
             block_value = struct.unpack('I', self.bytes[idx + 4:idx + 8])[0]
-            self.table.append(Block(block_idx, block_value))
+            self.table.add(Block(int(block_idx), int(block_value)))
 
     def __init_root_dir__(self):
         self.idx_root_dir_start = self.idx_table_fat_end
         self.idx_root_dir_end = self.idx_root_dir_start + (20 * self.size_root_dir)
-        self.root_dir = []
+        self.root_dir = TreeFiles()
         for idx in range(self.idx_root_dir_start, self.idx_root_dir_end, 20):
-            first_block_number = struct.unpack('I', self.bytes[idx + 12: idx + 16])
-            attr = "catalog" if struct.unpack('I', self.bytes[idx + 16: idx + 20]) == 1 else "file"
-            name_extension = FileUtils.get_content_from_byte_array(self.bytes[idx: idx + 12]).split('.')
-            name_extension.append("None")
-            self.root_dir.append(Object(name_extension[0], name_extension[1], first_block_number, attr))
+            tree_node = self.__define_root_element__(self.bytes[idx:idx + 20])
+            if tree_node.name != "":
+                self.root_dir.add_child(tree_node)
 
     def __init_data__(self):
         self.idx_data_start = self.idx_root_dir_end
@@ -94,34 +119,59 @@ class FileSystem:
             self.blocks.append(self.bytes[begin:end])
 
     def print_table(self):
-        print("Table FAT")
-        for block in self.table:
-            if block.value != 0 and block.file == "":
-                print(block)
+        self.table.print()
 
     def print_root_dir(self):
-        for el in self.root_dir:
-            print(el)
+        self.root_dir.print()
 
-    def get_file(self, start_block: int, file: str = ""):
-        print("-- start find file --")
-        itr = start_block
-        while True:
-            block = self.table[itr]
-            block.file = file
-            if block.value == 0:
-                break
-            else:
-                itr = block.value
-                # Выходим т.к это значит что указан блок == конец файла
-                if itr > self.size_table_element:
-                    block.file = file + "end"
-                    break
-
+    # === CRUD ===
     def get_block(self, index: int):
-        print(f"Get block with index={index}")
         block = self.blocks[index]
         print(FileUtils.get_content_from_byte_array(block))
+
+    def get_file(self, start_block: int):
+        chain = self.__get_chain_file__(start_block)
+        for block_idx in chain:
+            self.get_block(block_idx)
+
+    def delete_file(self, start_block: int):
+        for block_number in self.__get_chain_file__(start_block):
+            self.table[block_number].value = 0
+
+    def save_file(self, start_block: int, path: str):
+        chain = self.__get_chain_file__(start_block)
+        with open(path, "wb") as binary_file:
+            # Write bytes to file
+            for block_index in chain:
+                binary_file.write(self.blocks[block_index])
+
+    def child_root_dir(self, block_number: int):
+        block = self.blocks[block_number]
+        tree_node = self.__define_root_element__(block[0:20])
+        self.root_dir.add_child_for_node(block_number, tree_node)
+
+    @classmethod
+    def __define_root_element__(cls, data: bytearray):
+        first_block_number = struct.unpack('I', data[12:16])[0]
+        attr = FileType.CATALOG if struct.unpack('I', data[16:20]) == 1 else FileType.FILE
+        name_extension = FileUtils.get_content_from_byte_array(data[:12]).split('.')
+        name_extension.append('None')
+        return TreeNode(name_extension[0], name_extension[1], first_block_number, attr)
+
+    def __get_chain_file__(self, start_block: int) -> list[int]:
+        result = []
+        itr = start_block
+        while True:
+            if itr > self.size_table_element:
+                break
+            else:
+                result.append(itr)
+                block = self.table.table[itr]
+                if block.value == 0:
+                    break
+                else:
+                    itr = block.value
+        return result
 
     def print_markup(self):
         print(f"------------------------")
@@ -140,13 +190,16 @@ if __name__ == '__main__':
     print("Hello")
     fs = FileSystem("v9.dat")
     fs.print_super_block()
-    fs.print_table()
     fs.print_root_dir()
-    fs.get_file(97, "source")
-    fs.get_file(231, "w9")
-    fs.get_file(451, "Akh9")
+    fs.child_root_dir(97)
+    fs.print_root_dir()
+    # fs.get_file(231)
+    # fs.save_file(231, "text.txt")
+    # fs.get_file(272)
     fs.print_markup()
-    fs.print_table()
-    fs.get_block(97)
 
 # 451 306 431 453 226 497 407 5 385 264 507 200 493 449 265 455 126 158 341
+
+# Удаление файла это по сути зануление блока в корневом каталоге? да
+# Дерево
+# Сохранение файла - он может быть на несколько блоков? В памяти программы сохраняем или пишем в dat файл?
