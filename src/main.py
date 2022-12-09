@@ -60,13 +60,21 @@ class FileSystem:
         self.__init_file__(path)
         self.__init_super_block__()
         self.__init_table_fat__()
-        self.__init_root_dir__()
+        self.__init_root_dir_border__()  # Инициализация чтобы удобно определить init_data
         self.__init_data__()
+        self.__init_root_dir__()
         self.len_root_directory = self.size_root_dir * self.size_block
 
     def print_super_block(self):
         print(
-            f"SuperBlock path={self.path}, size_block={self.size_block} bytes, size_table={self.size_table} bytes, size_table_el={self.size_table_element}, size_root_dir={self.size_root_dir}")
+            f"""SuperBlock 
+            path            =   {self.path}, 
+            size_block      =   {self.size_block} bytes, 
+            size_table      =   {self.size_table} bytes, 
+            size_table_el   =   {self.size_table_element}, 
+            size_root_dir   =   {self.size_root_dir}
+            """
+        )
 
     def __init_file__(self, path: str):
         self.path = path
@@ -100,14 +108,18 @@ class FileSystem:
             block_value = struct.unpack('I', self.bytes[idx + 4:idx + 8])[0]
             self.table.add(Block(int(block_idx), int(block_value)))
 
-    def __init_root_dir__(self):
+    def __init_root_dir_border__(self):
         self.idx_root_dir_start = self.idx_table_fat_end
         self.idx_root_dir_end = self.idx_root_dir_start + (20 * self.size_root_dir)
+
+    def __init_root_dir__(self):
         self.root_dir = TreeFiles()
         for idx in range(self.idx_root_dir_start, self.idx_root_dir_end, 20):
             tree_node = self.__define_root_element__(self.bytes[idx:idx + 20])
             if tree_node.name != "":
                 self.root_dir.add_child(tree_node)
+                if tree_node.file_type == FileType.CATALOG:
+                    self.child_root_dir(tree_node.idx_start_block)
 
     def __init_data__(self):
         self.idx_data_start = self.idx_root_dir_end
@@ -153,7 +165,7 @@ class FileSystem:
     @classmethod
     def __define_root_element__(cls, data: bytearray):
         first_block_number = struct.unpack('I', data[12:16])[0]
-        attr = FileType.CATALOG if struct.unpack('I', data[16:20]) == 1 else FileType.FILE
+        attr = FileType.CATALOG if struct.unpack('I', data[16:20])[0] == 1 else FileType.FILE
         name_extension = FileUtils.get_content_from_byte_array(data[:12]).split('.')
         name_extension.append('None')
         return TreeNode(name_extension[0], name_extension[1], first_block_number, attr)
@@ -175,11 +187,11 @@ class FileSystem:
 
     def print_markup(self):
         print(f"------------------------")
-        print(f"Markup superblock: {self.idx_super_block_start}-{self.idx_super_block_end}")
-        print(f"Markup table fat: {self.idx_table_fat_start}-{self.idx_table_fat_end}")
-        print(f"Markup root dir: {self.idx_root_dir_start}-{self.idx_root_dir_end}")
-        print(f"Markup data: {self.idx_data_start}-{self.idx_data_end}")
-        print(f"Size all image = {len(self.bytes)}")
+        print(f"Markup superblock   : {self.idx_super_block_start}-{self.idx_super_block_end}")
+        print(f"Markup table fat    : {self.idx_table_fat_start}-{self.idx_table_fat_end}")
+        print(f"Markup root dir     : {self.idx_root_dir_start}-{self.idx_root_dir_end}")
+        print(f"Markup data         : {self.idx_data_start}-{self.idx_data_end}")
+        print(f"Size all image      = {len(self.bytes)}")
         print(f"------------------------")
 
     def __str__(self) -> str:
@@ -190,8 +202,6 @@ if __name__ == '__main__':
     print("Hello")
     fs = FileSystem("v9.dat")
     fs.print_super_block()
-    fs.print_root_dir()
-    fs.child_root_dir(97)
     fs.print_root_dir()
     # fs.get_file(231)
     # fs.save_file(231, "text.txt")

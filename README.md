@@ -1,5 +1,10 @@
-# FatSystem
+# Fat System
 
+#### **Описание проекта**
+
+
+
+#### **Настройка проекта**
 1) Создаем **virtualenv >>** `python -m venv env`
 2) Обновляем pip: `pip install -U pip`
 3) В проекте создаем файл **requirements.txt**
