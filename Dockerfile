@@ -9,6 +9,7 @@ RUN pip install -r requirements.txt
 # копирование содержимого локальной директории src в рабочую директорию
 COPY main.py ./
 COPY ./src/ src
+COPY ./tests/ tests
 COPY v9.dat ./
 # команда, выполняемая при запуске контейнера
 CMD [ "python", "main.py" ]
