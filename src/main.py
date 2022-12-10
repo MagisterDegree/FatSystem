@@ -8,21 +8,27 @@ from src.tree_node import TreeNode
 
 class TreeFiles:
     def __init__(self):
-        self.name = "root"
-        self.children = []
+        self.tree = TreeNode("root", "None", -1, FileType.CATALOG)
 
     def add_child(self, node: TreeNode):
-        self.children.append(node)
+        self.tree.add_child(node)
 
     def add_child_for_node(self, base_node_idx_start_block: int, node: TreeNode):
-        for child in self.children:
+        for child in self.tree.children:
             if child.idx_start_block == base_node_idx_start_block:
                 child.add_child(node)
 
+    def delete_node(self, idx_start_block: int):
+        # ТУТ РЕКУРСИВНО НАДО ЗАПИЛИТЬ
+        self.__check_and_delete_node(self.tree, idx_start_block)
+
+    def __check_and_delete_node(self, tree_node: TreeNode, idx_start_block: int):
+        tree_node.children = [x for x in tree_node.children if x.idx_start_block != idx_start_block]
+        for node in tree_node.children:
+            self.__check_and_delete_node(node, idx_start_block)
+
     def print(self):
-        print(f"/{self.name}")
-        for child in self.children:
-            child.print()
+        self.tree.print()
 
 
 class TableFAT:
@@ -32,6 +38,9 @@ class TableFAT:
 
     def add(self, block: Block):
         self.table.append(block)
+
+    def clear(self, idx_block: int):
+        self.table[idx_block].value = 0
 
     def print(self, show_empty: bool = False):
         print(" === Table FAT === ")
@@ -137,18 +146,21 @@ class FileSystem:
         self.root_dir.print()
 
     # === CRUD ===
-    def get_block(self, index: int):
+    def __print_block__(self, index: int):
         block = self.blocks[index]
         print(FileUtils.get_content_from_byte_array(block))
 
-    def get_file(self, start_block: int):
+    def print_file(self, start_block: int):
         chain = self.__get_chain_file__(start_block)
         for block_idx in chain:
-            self.get_block(block_idx)
+            self.__print_block__(block_idx)
 
     def delete_file(self, start_block: int):
+        # удаляем данные из TreeFiles
+        self.root_dir.delete_node(start_block)
+        # удаляем данные в таблице FAT
         for block_number in self.__get_chain_file__(start_block):
-            self.table[block_number].value = 0
+            self.table.clear(block_number)
 
     def save_file(self, start_block: int, path: str):
         chain = self.__get_chain_file__(start_block)
@@ -198,15 +210,65 @@ class FileSystem:
         return f"""FileSystem(path={self.path}, size_block={self.size_block} bytes, size_table={self.size_table} bytes, size_table_el={self.size_table_element}, size_root_dir={self.size_root_dir}, len_root_directory={self.len_root_directory})"""
 
 
+class FileSystemMenu:
+    def __init__(self, file_system: FileSystem):
+        self.fs = file_system
+
+    def start(self):
+        while True:
+            print(
+                f"""
+                Menu:
+                1) Show SuperBlock
+                2) Show Root Directory
+                3) Show TableFat
+                4) Delete file in File System
+                5) Show Tree
+                6) Save file
+                7) Show content txt file
+                8) Exit
+                """
+            )
+            input_menu_item = int(input())
+            if input_menu_item == 1:
+                self.fs.print_super_block()
+                print()
+            elif input_menu_item == 2:
+                self.fs.print_root_dir()
+                print()
+            elif input_menu_item == 3:
+                self.fs.print_table()
+                print()
+            elif input_menu_item == 4:
+                print("Please, select item and input first idx block:")
+                idx = int(input())
+                self.fs.delete_file(idx)
+                print("File success deleted!")
+            elif input_menu_item == 5:
+                self.fs.print_root_dir()
+                print()
+            elif input_menu_item == 6:
+                print("Please, select item and input first idx block:")
+                idx = int(input())
+                print("Ok, and please input absolute path:")
+                path = input()
+                self.fs.save_file(idx, path)
+                print("File success save!")
+            elif input_menu_item == 7:
+                print("Please, select item and input first idx block:")
+                idx = int(input())
+                self.fs.print_file(idx)
+            elif input_menu_item == 8:
+                exit()
+            else:
+                print("This menu item not exist")
+            print("Select next menu item ...")
+
+
 if __name__ == '__main__':
-    print("Hello")
     fs = FileSystem("v9.dat")
-    fs.print_super_block()
-    fs.print_root_dir()
-    # fs.get_file(231)
-    # fs.save_file(231, "text.txt")
-    # fs.get_file(272)
-    fs.print_markup()
+    menu = FileSystemMenu(fs)
+    menu.start()
 
 # 451 306 431 453 226 497 407 5 385 264 507 200 493 449 265 455 126 158 341
 
