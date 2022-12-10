@@ -1,4 +1,4 @@
-from src.file_type import FileType
+from src.fs.file_type import FileType
 
 
 class TreeNode:

@@ -1,9 +1,9 @@
 import struct
 
-from src.block import Block
-from src.file_type import FileType
-from src.file_utils import FileUtils
-from src.tree_node import TreeNode
+from src.fs.block import Block
+from src.fs.file_type import FileType
+from src.fs.file_utils import FileUtils
+from src.fs.tree_node import TreeNode
 
 
 class TreeFiles:
