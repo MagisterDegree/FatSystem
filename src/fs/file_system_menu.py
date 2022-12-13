@@ -36,7 +36,7 @@ class FileSystemMenu:
                 self.fs.delete_file(idx)
                 print("File success deleted!")
             elif input_menu_item == 5:
-                self.fs.print_root_dir()
+                self.fs.print_tree_all()
                 print()
             elif input_menu_item == 6:
                 print("Please, select item and input first idx block:")

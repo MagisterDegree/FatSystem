@@ -25,3 +25,7 @@ class TreeFiles:
 
     def print(self):
         self.tree.print()
+
+    def print_children(self):
+        for child in self.tree.children:
+            print(child)

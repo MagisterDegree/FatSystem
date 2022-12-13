@@ -88,6 +88,9 @@ class FileSystem:
         self.table.print()
 
     def print_root_dir(self):
+        self.root_dir.print_children()
+
+    def print_tree_all(self):
         self.root_dir.print()
 
     # === CRUD ===
